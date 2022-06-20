@@ -1,11 +1,12 @@
 
-const path = require('path');
-const fs = require('fs/promises');
+import path from 'path';
+import fs from 'fs/promises';
 
-//const SwaggerParser = require('@apidevtools/swagger-parser');
+import { OpenAPIV3 } from 'openapi-types';
+import SwaggerParser from '@apidevtools/swagger-parser';
 
 
-const generateZodForSchema = (schemaId: string, schema: any): string => {
+const generateZodForSchema = (schemaId: string, schema: OpenAPIV3.SchemaObject): string => {
   return `
 import * as z from 'zod';
 
@@ -18,15 +19,19 @@ const main = async () => {
   // const api = await SwaggerParser.validate(path.join(__dirname, '../resources/roche_api.json'));
   // console.log(api.components.schemas.KeyObject);
   
-  const document = JSON.parse(await fs.readFile(path.join(__dirname, '../resources/roche_api.json'), 'utf8'));
+  const documentContent = await fs.readFile(path.join(__dirname, '../resources/roche_api.json'), 'utf8');
+  const document: OpenAPIV3.Document = JSON.parse(documentContent);
   //console.log(document.components.schemas.KeyObject);
   
   console.info('Converting...');
   
-  for (const [schemaId, schema] of Object.entries(document.components.schemas)) {
-    const generatedCode = generateZodForSchema(schemaId, schema);
-    //console.log(generatedCode); // Debug
-    await fs.writeFile(path.join(__dirname, `../generated/${schemaId}.ts`), generatedCode);
+  const schemas = document.components?.schemas ?? {};
+  for (const [schemaId, schema] of Object.entries(schemas)) {
+    if (!('$ref' in schema)) {
+      const generatedCode = generateZodForSchema(schemaId, schema);
+      //console.log(generatedCode); // Debug
+      await fs.writeFile(path.join(__dirname, `../generated/${schemaId}.ts`), generatedCode);
+    }
   }
   
   console.info('Done!');
