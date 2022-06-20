@@ -1,0 +1,16 @@
+{
+  "name": "openapi-to-zod",
+  "version": "0.0.0",
+  "license": "UNLICENSED",
+  "homepage": "https://bitbucket.org/fortanix/openapi-to-zod#readme",
+  "description": "",
+  "author": "Fortanix",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@bitbucket.org/fortanix/openapi-to-zod.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "main": "index.js"
+}
