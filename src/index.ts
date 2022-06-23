@@ -5,14 +5,66 @@ import fs from 'fs/promises';
 import { OpenAPIV3 } from 'openapi-types';
 
 
+
+
+const generateZodForBooleanSchema= (schemaId:string,schema:OpenAPIV3.NonArraySchemaObject):string=>{
+
+  return`
+  import * as z from 'zod'
+
+  export const ${schemaId}=z.boolean()
+  `.trim();
+}
+
+
+const generateZodForNumberSchema= (schemaId:string,schema:OpenAPIV3.NonArraySchemaObject):string=>{
+
+  return`
+  import * as z from 'zod'
+
+  export const ${schemaId}=z.number()
+  `.trim();
+}
+
+
+const generateZodForStringSchema= (schemaId:string,schema:OpenAPIV3.NonArraySchemaObject):string=>{
+
+  const type =schema.type ?? {};
+
+  return `
+  import * as z from 'zod';
+
+  export const ${schemaId}=z.string()
+  `.trim();
+}
+
+
+const generateZodForIntegerSchema= (schemaId:string,schema:OpenAPIV3.NonArraySchemaObject):string=>{
+
+  return`
+  import * as z from 'zod'
+
+  export const ${schemaId}=z.number()
+  `.trim();
+}
+
+
 const generateZodForObjectSchema = (schemaId: string, schema: OpenAPIV3.NonArraySchemaObject): string => {
   const properties = schema.properties ?? {};
   
+  //FEW generatedprops are also objects and arrays: FIXME
   const generatedProps: Array<string> = [];
   for (const [propertyName, property] of Object.entries(properties)) {
-    generatedProps.push(`${propertyName}: undefined,`);
-  }
-  
+
+               if('$ref'in property){
+                // handle later
+               }
+               else{
+                if(property.type==='integer'){property.type='number'}
+                generatedProps.push(`${propertyName}: z.${property.type}(),`);        
+               }
+    }
+
   return `
 import * as z from 'zod';
 
@@ -22,10 +74,36 @@ export const ${schemaId} = z.object({
   `.trim();
 };
 
+
+
+
+/*const generateZodForArraySchema=(schemaId:string,schema:OpenAPIV3.ArraySchemaObject):string=>{
+
+
+  //ArraySchemaObject has ArraySchemaObjectType and items contain ReferenceObject| schemaObject
+  //handle it later
+  return `
+  import * as z from 'zod;
+
+  export const ${schemaId}=z.array()
+`.trim()
+
+}*/
+
+
+
 const generateZodForSchema = (schemaId: string, schema: OpenAPIV3.SchemaObject): string => {
   if ('items' in schema) {
     // Case: ArraySchemaObject
-    throw new Error('Not supported');
+    throw new Error('Missing type');
+    //const type:undefined| OpenAPIV3.ArraySchemaObject=schema.type;
+   // if(typeof type=== undefined){throw new Error('Missing type');}
+
+   /*else{
+
+        return generateZodForArraySchema(schemaId,schema);
+    }*/
+    
   } else {
     // Case: NonArraySchemaObject
     const type: undefined | OpenAPIV3.NonArraySchemaObjectType = schema.type;
@@ -33,10 +111,10 @@ const generateZodForSchema = (schemaId: string, schema: OpenAPIV3.SchemaObject):
     if (typeof type === 'undefined') { throw new Error(`Missing 'type'`); }
     
     switch (type) {
-      case 'boolean': throw new Error(`Not yet supported`);
-      case 'number': throw new Error(`Not yet supported`);
-      case 'string': throw new Error(`Not yet supported`);
-      case 'integer': throw new Error(`Not yet supported`);
+      case 'boolean': return generateZodForBooleanSchema(schemaId,schema);
+      case 'number':  return generateZodForNumberSchema(schemaId,schema);
+      case 'string':return generateZodForStringSchema(schemaId,schema);
+      case 'integer': return generateZodForIntegerSchema(schemaId,schema);
       case 'object': return generateZodForObjectSchema(schemaId, schema);
     }
   }
@@ -54,6 +132,7 @@ const main = async () => {
     try {
       if ('$ref' in schema) {
         // Case: OpenAPIV3.ReferenceObject
+        //FIXME FIXME FIXME FIXME FIXME FIXME FIXME
         throw new Error(`Not implemented`);
       } else {
         // Case: OpenAPIV3.SchemaObject
