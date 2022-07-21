@@ -11,9 +11,9 @@
     "forceConsistentCasingInFileNames": true,
     "module": "commonjs",
     "moduleResolution": "Node",
-    "resolveJsonModule": true,
+    "resolveJsonModule": true
     // "isolatedModules": true,
     //"noEmit": true,
   },
-  "include": ["src"],
+  "include": ["src"]
 }
