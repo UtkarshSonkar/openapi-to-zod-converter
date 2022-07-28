@@ -264,14 +264,14 @@ const generateZodForReferenceObject = (
   schema: OpenAPIV3.ReferenceObject
 ): Result => {
   const refs: Array<string> = [];
-  const pattern = new RegExp("#/components/schemas/");
-  if (!pattern.test(schema.$ref)) {
-    throw new Error("Reference format not supported");
+  
+  const pattern = /^#\/components\/schemas\/([a-z0-9_$]+)/i;
+  const matches = schema.$ref.match(pattern);
+  if (!matches) {
+    throw new Error(`Reference format not supported: ${schema.$ref}`);
   }
-  const val = schema.$ref.split("/")[3];
-
-  const code = `${val}`;
-
+  const code = `${matches[1]}`;
+  
   return { code, refs };
 };
 
@@ -370,6 +370,7 @@ const generateZodModule = (
    ${refs.map((ref) => `import {${ref}} from './${ref}'\n`).join("")}
 
    export const ${schemaId} = ${Zodcode};
+   export type ${schemaId} = z.infer<typeof ${schemaId}>;
      `.trim();
 };
 

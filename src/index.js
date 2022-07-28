@@ -19,7 +19,6 @@ const generateZodForObjectSchema = (schemaId, schema) => {
         if ("$ref" in property) {
             generatedProp = generateZodForReferenceObject(property);
             if (!refs.includes(generatedProp.code)) {
-                //refs.push(generateRefsForReferenceObject(refs, property));
                 refs.push(generatedProp.code);
             }
             refs = refs.concat(generatedProp.refs);
@@ -88,7 +87,6 @@ const generateZodForArraySchema = (schemaId, schema) => {
     else {
         const type = items.type;
         switch (type) {
-            //NonArraySchemaType
             case "object":
                 generatedProp = generateZodForObjectSchema(schemaId, items);
                 code = `z.array(
@@ -218,12 +216,12 @@ const generateZodForBooleanSchema = (schemaId, schema) => {
 };
 const generateZodForReferenceObject = (schema) => {
     const refs = [];
-    const pattern = new RegExp("#/components/schemas/");
-    if (!pattern.test(schema.$ref)) {
-        throw new Error("Reference format not supported");
+    const pattern = /^#\/components\/schemas\/([a-z0-9_$]+)/i;
+    const matches = schema.$ref.match(pattern);
+    if (!matches) {
+        throw new Error(`Reference format not supported: ${schema.$ref}`);
     }
-    const val = schema.$ref.split("/")[3];
-    const code = `${val}`;
+    const code = `${matches[1]}`;
     return { code, refs };
 };
 const generateZodForAdditionalProp = (property) => {
@@ -299,6 +297,7 @@ const generateZodModule = (schemaId, schema) => {
    ${refs.map((ref) => `import {${ref}} from './${ref}'\n`).join("")}
 
    export const ${schemaId} = ${Zodcode};
+   export type ${schemaId} = z.infer<typeof ${schemaId}>;
      `.trim();
 };
 const main = async () => {
