@@ -205,11 +205,12 @@ const generateZodForBooleanSchema = (schemaId, schema) => {
     const properties = schema.properties ?? {};
     const generatedProps = [];
     const refs = [];
+    let detailscomment = "";
     if ("description" in schema) {
-        var detailscomment = `${schema.description}`;
+        detailscomment = `${schema.description}`;
     }
     else {
-        var detailscomment = "";
+        detailscomment = "";
     }
     const code = `z.boolean(${generatedProps.join("\n")})/*${detailscomment}*/`;
     return { code, refs };
@@ -255,8 +256,7 @@ const generateZodForAdditionalProp = (property) => {
     return { code, refs };
 };
 const generateZodModule = (schemaId, schema) => {
-    let Zodcode2 = "";
-    let Zodcode = "";
+    let code = "";
     let refs = [];
     if ("$ref" in schema) {
         throw new Error("ReferenceObject schema currently not supported");
@@ -264,7 +264,7 @@ const generateZodModule = (schemaId, schema) => {
     else {
         if ("items" in schema) {
             const zodForArraySchemaTuple = generateZodForArraySchema(schemaId, schema);
-            Zodcode = zodForArraySchemaTuple.code;
+            code = zodForArraySchemaTuple.code;
             refs = zodForArraySchemaTuple.refs;
         }
         else {
@@ -275,28 +275,28 @@ const generateZodModule = (schemaId, schema) => {
             switch (type) {
                 case "string":
                     const zodForStringSchemaTuple = generateZodForStringSchema(schemaId, schema);
-                    Zodcode = zodForStringSchemaTuple.code;
+                    code = zodForStringSchemaTuple.code;
                     break;
                 case "integer":
                     const zodForIntegerSchemaTuple = generateZodForIntegerSchema(schemaId, schema);
-                    Zodcode = zodForIntegerSchemaTuple.code;
+                    code = zodForIntegerSchemaTuple.code;
                     break;
                 case "object":
                     const zodForObjectSchemaTuple = generateZodForObjectSchema(schemaId, schema);
-                    Zodcode = zodForObjectSchemaTuple.code;
+                    code = zodForObjectSchemaTuple.code;
                     refs = zodForObjectSchemaTuple.refs;
                     break;
                 default:
-                    Zodcode = "default";
+                    code = "default";
                     break;
             }
         }
     }
     return `
-   import * as z from 'zod' //helo;
+   import * as z from 'zod';
    ${refs.map((ref) => `import {${ref}} from './${ref}'\n`).join("")}
 
-   export const ${schemaId} = ${Zodcode};
+   export const ${schemaId} = ${code};
    export type ${schemaId} = z.infer<typeof ${schemaId}>;
      `.trim();
 };
@@ -310,7 +310,7 @@ const main = async () => {
         try {
             // Case: OpenAPIV3.SchemaObject
             const generatedCode = generateZodModule(schemaId, schema);
-            await promises_1.default.writeFile(path_1.default.join(__dirname, `../generated/${schemaId}.ts`), prettier_1.default.format(generatedCode, { parser: "babel" }));
+            await promises_1.default.writeFile(path_1.default.join(__dirname, `../generated/${schemaId}.ts`), prettier_1.default.format(generatedCode, { parser: "babel", singleQuote: true }));
         }
         catch (e) {
             console.error(e);
