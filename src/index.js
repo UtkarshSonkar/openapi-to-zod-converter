@@ -14,14 +14,13 @@ const generateZodForObjectSchema = (schemaId, schema) => {
     if ("required" in schema && schema.required !== undefined) {
         required = schema.required;
     }
-    let gcode;
     for (const [propertyName, property] of Object.entries(properties)) {
         let generatedProp = null;
         if ("$ref" in property) {
-            const val = property.$ref.split("/");
-            generatedProp = generateZodForReferenceObject(propertyName, property);
-            if (!refs.includes(val[3])) {
-                refs.push(generateRefsForReferenceObject(generatedProp.refs, property));
+            generatedProp = generateZodForReferenceObject(property);
+            if (!refs.includes(generatedProp.code)) {
+                //refs.push(generateRefsForReferenceObject(refs, property));
+                refs.push(generatedProp.code);
             }
             refs = refs.concat(generatedProp.refs);
         }
@@ -53,7 +52,6 @@ const generateZodForObjectSchema = (schemaId, schema) => {
             if (required.includes(propertyName)) {
                 generatedProps.push(`${propertyName}: ${generatedProp.code},`);
                 refs = [...new Set([...refs, ...generatedProp.refs])];
-                //refs = refs.concat(generatedProp.refs);
             }
             else {
                 const optionalZodcode = `(${generatedProp.code}`.endsWith(",")
@@ -61,14 +59,16 @@ const generateZodForObjectSchema = (schemaId, schema) => {
                     : `${generatedProp.code}`;
                 generatedProps.push(`${propertyName}: z.optional(${optionalZodcode}), `);
                 refs = [...new Set([...refs, ...generatedProp.refs])];
-                //refs = refs.concat(generatedProp.refs);
             }
         }
     }
-    const code = `z.object({
+    const withCommaCode = `z.object({
   ${generatedProps.join("\n")}
 })
   `.trim();
+    const code = withCommaCode.endsWith(",")
+        ? withCommaCode.slice(0, -1)
+        : withCommaCode;
     return { code, refs };
 };
 const generateZodForArraySchema = (schemaId, schema) => {
@@ -78,10 +78,9 @@ const generateZodForArraySchema = (schemaId, schema) => {
     let generatedProp = null;
     let code = "";
     if ("$ref" in items) {
-        const val = items.$ref.split("/");
-        generatedProp = generateZodForReferenceObject(schemaId, items);
-        if (!refs.includes(val[3])) {
-            refs.push(generateRefsForReferenceObject(refs, items));
+        generatedProp = generateZodForReferenceObject(items);
+        if (!refs.includes(generatedProp.code)) {
+            refs.push(generatedProp.code);
         }
         refs = [...new Set([...refs, ...generatedProp.refs])];
         code = `z.array(${generatedProp.code})`;
@@ -94,31 +93,71 @@ const generateZodForArraySchema = (schemaId, schema) => {
                 generatedProp = generateZodForObjectSchema(schemaId, items);
                 code = `z.array(
           ${generatedProp.code}
+        )`.endsWith(",")
+                    ? `z.array(
+          ${generatedProp.code}
+        )`
+                        .slice(0, -1)
+                        .trim()
+                    : `z.array(
+          ${generatedProp.code}
         )`.trim();
                 break;
             case "string":
                 generatedProp = generateZodForStringSchema(schemaId, items);
                 code = `z.array(
           ${generatedProp.code}
+        )`.endsWith(",")
+                    ? `z.array(
+          ${generatedProp.code}
+        )`
+                        .slice(0, -1)
+                        .trim()
+                    : `z.array(
+          ${generatedProp.code}
         )`.trim();
                 break;
             case "boolean":
                 generatedProp = generateZodForBooleanSchema(schemaId, items);
                 code = `z.array(
-            ${generatedProp.code}
-          )`.trim();
+          ${generatedProp.code}
+        )`.endsWith(",")
+                    ? `z.array(
+          ${generatedProp.code}
+        )`
+                        .slice(0, -1)
+                        .trim()
+                    : `z.array(
+          ${generatedProp.code}
+        )`.trim();
                 break;
             case "integer":
                 generatedProp = generateZodForIntegerSchema(schemaId, items);
                 code = `z.array(
-              ${generatedProp.code}
-            )`.trim();
+          ${generatedProp.code}
+        )`.endsWith(",")
+                    ? `z.array(
+          ${generatedProp.code}
+        )`
+                        .slice(0, -1)
+                        .trim()
+                    : `z.array(
+          ${generatedProp.code}
+        )`.trim();
                 break;
             case "array":
                 generatedProp = generateZodForArraySchema(schemaId, items);
                 code = `z.array(
-            ${generatedProp.code}
-          )`.trim();
+          ${generatedProp.code}
+        )`.endsWith(",")
+                    ? `z.array(
+          ${generatedProp.code}
+        )`
+                        .slice(0, -1)
+                        .trim()
+                    : `z.array(
+          ${generatedProp.code}
+        )`.trim();
                 break;
             default:
                 generatedProp = null;
@@ -139,12 +178,11 @@ const generateZodForStringSchema = (schemaId, schema) => {
     if ("enum" in schema) {
         schema.enum?.forEach((key, index) => {
             generatedProps.push(`'${key}',`);
-            code = `z.enum([${generatedProps.join("\n")}])/*${schema.description}*/ `.trim();
+            code = `z.enum([${generatedProps.join("\n")}])/*${schema.description === undefined ? "" : schema.description}*/ `.trim();
         });
-        // generatedProps.push(`z.enum('${}'),`)
     }
     else {
-        code = `z.string(${generatedProps.join("\n")}) /*${schema.description}*/`.trim();
+        code = `z.string(${generatedProps.join("\n")}) /*${schema.description === undefined ? "" : schema.description}*/`.trim();
     }
     return { code, refs };
 };
@@ -152,14 +190,15 @@ const generateZodForIntegerSchema = (schemaId, schema) => {
     const properties = schema.properties ?? {};
     const generatedProps = [];
     const refs = [];
+    let detailscomment = "";
     if ("format" in schema && "description" in schema) {
-        var detailscomment = `${schema.description}'  format is: ${schema.format};`;
+        detailscomment = `${schema.description}'  format is: ${schema.format};`;
     }
     else if ("description" in schema) {
-        var detailscomment = `${schema.description}`;
+        detailscomment = `${schema.description}`;
     }
     else {
-        var detailscomment = "";
+        detailscomment = "";
     }
     const code = `z.number(${generatedProps.join("\n")})/*${detailscomment}*/ `;
     return { code, refs };
@@ -177,32 +216,33 @@ const generateZodForBooleanSchema = (schemaId, schema) => {
     const code = `z.boolean(${generatedProps.join("\n")})/*${detailscomment}*/`;
     return { code, refs };
 };
-const generateZodForReferenceObject = (schmaID, schema) => {
-    const val = schema.$ref.split("/");
+const generateZodForReferenceObject = (schema) => {
     const refs = [];
-    const code = `${val[3]}`;
+    const pattern = new RegExp("#/components/schemas/");
+    if (!pattern.test(schema.$ref)) {
+        throw new Error("Reference format not supported");
+    }
+    const val = schema.$ref.split("/")[3];
+    const code = `${val}`;
     return { code, refs };
-};
-const generateRefsForReferenceObject = (refs = [], property) => {
-    const val = property.$ref.split("/");
-    return `${val[3]}`;
 };
 const generateZodForAdditionalProp = (property) => {
     const refs = [];
     let code = "";
     if (typeof property === "boolean") {
+        throw new Error("boolean type not found");
     }
     else {
         if ("items" in property && "$ref" in property.items) {
-            const val = property.items.$ref.split("/");
-            refs.push(val[3]);
-            code = `z.record(z.array(${val[3]}))`.trim();
+            const val = generateZodForReferenceObject(property.items).code;
+            refs.push(val);
+            code = `z.record(z.array(${val}))`.trim();
         }
         else {
             if ("$ref" in property) {
-                const val = property.$ref.split("/");
-                refs.push(val[3]);
-                code = `z.record(${val[3]})`.trim();
+                const val = generateZodForReferenceObject(property).code;
+                refs.push(val);
+                code = `z.record(${val})`.trim();
             }
             else {
                 if (property.type === "object") {
@@ -217,43 +257,36 @@ const generateZodForAdditionalProp = (property) => {
     return { code, refs };
 };
 const generateZodModule = (schemaId, schema) => {
-    // Branches...
     let Zodcode2 = "";
     let Zodcode = "";
     let refs = [];
     if ("$ref" in schema) {
-        //No schema of this type in roche-openapi
+        throw new Error("ReferenceObject schema currently not supported");
     }
     else {
         if ("items" in schema) {
-            // Case: ArraySchemaObject
-            const ZodForArraySchematuple = generateZodForArraySchema(schemaId, schema);
-            Zodcode = ZodForArraySchematuple.code;
-            Zodcode2 = Zodcode.endsWith(",") ? Zodcode.slice(0, -1) : Zodcode;
-            refs = ZodForArraySchematuple.refs;
+            const zodForArraySchemaTuple = generateZodForArraySchema(schemaId, schema);
+            Zodcode = zodForArraySchemaTuple.code;
+            refs = zodForArraySchemaTuple.refs;
         }
         else {
-            // Case: NonArraySchemaObject
             const type = schema.type;
             if (typeof type === "undefined") {
                 throw new Error(`Missing 'type'`);
             }
             switch (type) {
                 case "string":
-                    const ZodForStringSchematuple = generateZodForStringSchema(schemaId, schema);
-                    Zodcode = ZodForStringSchematuple.code;
-                    Zodcode2 = Zodcode.endsWith(",") ? Zodcode.slice(0, -1) : Zodcode;
+                    const zodForStringSchemaTuple = generateZodForStringSchema(schemaId, schema);
+                    Zodcode = zodForStringSchemaTuple.code;
                     break;
                 case "integer":
-                    const ZodForIntegerSchematuple = generateZodForIntegerSchema(schemaId, schema);
-                    Zodcode = ZodForIntegerSchematuple.code;
-                    Zodcode2 = Zodcode.endsWith(",") ? Zodcode.slice(0, -1) : Zodcode;
+                    const zodForIntegerSchemaTuple = generateZodForIntegerSchema(schemaId, schema);
+                    Zodcode = zodForIntegerSchemaTuple.code;
                     break;
                 case "object":
-                    const ZodForObjectSchemaTuple = generateZodForObjectSchema(schemaId, schema);
-                    Zodcode = ZodForObjectSchemaTuple.code;
-                    Zodcode2 = Zodcode.endsWith(",") ? Zodcode.slice(0, -1) : Zodcode;
-                    refs = ZodForObjectSchemaTuple.refs;
+                    const zodForObjectSchemaTuple = generateZodForObjectSchema(schemaId, schema);
+                    Zodcode = zodForObjectSchemaTuple.code;
+                    refs = zodForObjectSchemaTuple.refs;
                     break;
                 default:
                     Zodcode = "default";
@@ -262,10 +295,10 @@ const generateZodModule = (schemaId, schema) => {
         }
     }
     return `
-   import * as z from 'zod';
-   ${refs.map((ref) => `import {${ref}} from './${ref}'${"\n"}`).join("")}
+   import * as z from 'zod' //helo;
+   ${refs.map((ref) => `import {${ref}} from './${ref}'\n`).join("")}
 
-   export const ${schemaId} = ${Zodcode2};
+   export const ${schemaId} = ${Zodcode};
      `.trim();
 };
 const main = async () => {
@@ -274,7 +307,7 @@ const main = async () => {
     console.info("Converting...");
     const schemas = document.components?.schemas ?? {};
     for (const [schemaId, schema] of Object.entries(schemas)) {
-        console.log(`generate schema for ${schemaId}`);
+        console.info(`generate schema for ${schemaId}`);
         try {
             // Case: OpenAPIV3.SchemaObject
             const generatedCode = generateZodModule(schemaId, schema);
