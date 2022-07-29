@@ -8,6 +8,7 @@ import { type } from "os";
 interface Result {
   code: string;
   refs: Array<string>;
+  comment: string;
 }
 
 const generateZodForObjectSchema = (
@@ -18,6 +19,7 @@ const generateZodForObjectSchema = (
   const generatedProps: Array<string> = [];
   let refs: Array<string> = [];
   let required: Array<string> = [];
+  let comment: string = "";
 
   if ("required" in schema && schema.required !== undefined) {
     required = schema.required;
@@ -62,7 +64,9 @@ const generateZodForObjectSchema = (
     }
     if (generatedProp !== null) {
       if (required.includes(propertyName)) {
-        generatedProps.push(`${propertyName}: ${generatedProp.code},`);
+        generatedProps.push(
+          `${propertyName}: ${generatedProp.code} /*${generatedProp.comment}*/,`
+        );
         refs = [...new Set([...refs, ...generatedProp.refs])];
       } else {
         const optionalZodcode = `(${generatedProp.code}`.endsWith(",")
@@ -70,22 +74,22 @@ const generateZodForObjectSchema = (
           : `${generatedProp.code}`;
 
         generatedProps.push(
-          `${propertyName}: z.optional(${optionalZodcode}), `
+          `${propertyName}: z.optional(${optionalZodcode}) /*${generatedProp.comment}*/, `
         );
         refs = [...new Set([...refs, ...generatedProp.refs])];
       }
     }
   }
 
-  const withCommaCode: string = `z.object({
-  ${generatedProps.join("\n")}
-})
-  `.trim();
+  const withCommaCode: string = `z.object({${generatedProps.join(
+    "\n"
+  )}})`.trim();
   const code: string = withCommaCode.endsWith(",")
     ? withCommaCode.slice(0, -1)
     : withCommaCode;
+  comment = schema.description === undefined ? "" : schema.description;
 
-  return { code, refs };
+  return { code, refs, comment };
 };
 
 const generateZodForArraySchema = (
@@ -97,6 +101,7 @@ const generateZodForArraySchema = (
   let refs: Array<string> = [];
   let generatedProp: Result | null = null;
   let code: string = "";
+  let comment: string = "";
 
   if ("$ref" in items) {
     generatedProp = generateZodForReferenceObject(items);
@@ -187,8 +192,8 @@ const generateZodForArraySchema = (
       refs = [...new Set([...refs, ...generatedProp.refs])];
     }
   }
-
-  return { code, refs };
+  comment = schema.description === undefined ? "" : schema.description;
+  return { code, refs, comment };
 };
 
 const generateZodForStringSchema = (
@@ -200,20 +205,18 @@ const generateZodForStringSchema = (
   const generatedProps: Array<string> = [];
   const refs: Array<string> = [];
   let code: string = "";
-
+  let comment: string = "";
   if ("enum" in schema) {
     schema.enum?.forEach((key, index) => {
       generatedProps.push(`'${key}',`);
-      code = `z.enum([${generatedProps.join("\n")}])/*${
-        schema.description === undefined ? "" : schema.description
-      }*/ `.trim();
+      code = `z.enum([${generatedProps.join("\n")}])`.trim();
+      comment = schema.description === undefined ? "" : schema.description;
     });
   } else {
-    code = `z.string(${generatedProps.join("\n")}) /*${
-      schema.description === undefined ? "" : schema.description
-    }*/`.trim();
+    code = `z.string(${generatedProps.join("\n")})`.trim();
+    comment = schema.description === undefined ? "" : schema.description;
   }
-  return { code, refs };
+  return { code, refs, comment };
 };
 
 const generateZodForIntegerSchema = (
@@ -224,20 +227,18 @@ const generateZodForIntegerSchema = (
 
   const generatedProps: Array<string> = [];
   const refs: Array<string> = [];
-  let detailscomment = "";
+  let comment = "";
 
   if ("format" in schema && "description" in schema) {
-    detailscomment = `${schema.description}'  format is: ${schema.format};`;
+    comment = `${schema.description}'  format is: ${schema.format};`;
   } else if ("description" in schema) {
-    detailscomment = `${schema.description}`;
+    comment = `${schema.description}`;
   } else {
-    detailscomment = "";
+    comment = "";
   }
 
-  const code: string = `z.number(${generatedProps.join(
-    "\n"
-  )}) /* ${detailscomment} */ `;
-  return { code, refs };
+  const code: string = `z.number(${generatedProps.join("\n")}) `;
+  return { code, refs, comment };
 };
 
 const generateZodForBooleanSchema = (
@@ -249,31 +250,30 @@ const generateZodForBooleanSchema = (
   const generatedProps: Array<string> = [];
   const refs: Array<string> = [];
 
-  let detailscomment = "";
+  let comment = "";
   if ("description" in schema) {
-    detailscomment = `${schema.description}`;
+    comment = `${schema.description}`;
   } else {
-    detailscomment = "";
+    comment = "";
   }
-  const code: string = `z.boolean(${generatedProps.join(
-    "\n"
-  )})/*${detailscomment}*/`;
-  return { code, refs };
+  const code: string = `z.boolean(${generatedProps.join("\n")})`;
+  return { code, refs, comment };
 };
 
 const generateZodForReferenceObject = (
   schema: OpenAPIV3.ReferenceObject
 ): Result => {
   const refs: Array<string> = [];
-  
+  let comment: string = "";
+
   const pattern = /^#\/components\/schemas\/([a-z0-9_$]+)/i;
   const matches = schema.$ref.match(pattern);
   if (!matches) {
     throw new Error(`Reference format not supported: ${schema.$ref}`);
   }
   const code = `${matches[1]}`;
-  
-  return { code, refs };
+
+  return { code, refs, comment };
 };
 
 const generateZodForAdditionalProp = (
@@ -281,6 +281,7 @@ const generateZodForAdditionalProp = (
 ): Result => {
   const refs: Array<string> = [];
   let code: string = "";
+  let comment: string = "";
 
   if (typeof property === "boolean") {
     throw new Error("boolean type not found");
@@ -306,7 +307,7 @@ const generateZodForAdditionalProp = (
     }
   }
 
-  return { code, refs };
+  return { code, refs, comment };
 };
 
 const generateZodModule = (
